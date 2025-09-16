@@ -1,0 +1,29 @@
+{
+    "Map/SizeTest": {
+        "height": 4300,
+        "width": 2
+    },
+    "activeFile": "",
+    "expandedProjectPaths": [
+    ],
+    "fileStates": {
+    },
+    "last.exportedFilePath": "/home/talgat/Dokumente/NDS/II_Projects/Backgrounds/Infinite_BG/image_data/tiled",
+    "last.imagePath": "/home/talgat/Dokumente/NDS/II_Projects/Backgrounds/Infinite_BG/gfx",
+    "map.lastUsedExportFilter": "GBA source files - regular (*.c *.h)",
+    "map.lastUsedFormat": "tmx",
+    "map.tileHeight": 24,
+    "map.tileWidth": 24,
+    "map.width": 20,
+    "openFiles": [
+    ],
+    "project": "BG.tiled-project",
+    "recentFiles": [
+    ],
+    "tileset.lastUsedFormat": "tsx",
+    "tileset.tileSize": {
+        "height": 24,
+        "width": 24
+    },
+    "tileset.useTransparentColor": true
+}
