@@ -1,15 +1,38 @@
 {
+    "version": "2.0.0",
     "tasks": [
         {
-            "type": "shell",
             "label": "Build NDS",
-            "command": "make",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "-i", "-c", "make"
+            ],
             "group": {
-                "kind" : "build",
+                "kind": "build",
                 "isDefault": true
             },
             "problemMatcher": []
+        },
+        {
+            "label": "run",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "-i", "-c",
+                "melonds \"$(basename \"$PWD\").nds\""
+            ],
+            "dependsOn": "Build NDS",
+            "problemMatcher": []
+        },
+        {
+            "label": "clean",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "-i", "-c", "make clean"
+            ],
+            "problemMatcher": []
         }
-    ],
-    "version": "2.0.0"
+    ]
 }
