@@ -161,7 +161,7 @@ int main(void) {
 	Vector_2D<u16> center_tile = {0,0};
 
 	Vector_2D<u16> dest_start = {0, 0};
-	Vector_2D<u16> dest_end = {(SCREEN_SIZE_X >> 3) + 2, (SCREEN_CENTER_Y >> 3) + 2};
+	Vector_2D<u16> dest_end = {(SCREEN_SIZE_X >> 3) + 1, (SCREEN_SIZE_Y >> 3) + 1};
 	Vector_2D<int> src_start = {0, 0};
 	Vector_2D<int> src_dim = {128, 128};
 	// Define all local borders, initialized during loop
@@ -176,10 +176,19 @@ int main(void) {
 
 	//Just used for Debugging
 	int last_dir = 0;
-	// Supports a Max scroll speed of 8 tiles (Could easily support more, if we take the right delta value)
-	u16 scroll_speed = 3;
+	// Supports a Max scroll speed of 8 pixels (Could easily support more, if we take the right delta value)
+	u16 scroll_speed = 6;
 	
-	u16 limit_scroll = 1;
+	u16 limit_scroll = 0;
+
+	center_tile = {global_pos.x >> 3, global_pos.y >> 3};
+
+	global_borders.sides.n = (center_tile.y - SCREEN_CENTER_Y_TILES - 1) & (src_dim.y - 1); 
+	global_borders.sides.s = (center_tile.y + SCREEN_CENTER_Y_TILES + 1) & (src_dim.y - 1);
+	global_borders.sides.e = (center_tile.x + SCREEN_CENTER_X_TILES + 1) & (src_dim.x - 1);
+	global_borders.sides.w = (center_tile.x - SCREEN_CENTER_X_TILES - 1) & (src_dim.x - 1);
+
+	prev_global_borders.sides = global_borders.sides;
 
 	while(1){
 		
@@ -211,16 +220,23 @@ int main(void) {
 		border_delta.sides.e = calc_wrapped_delta(global_borders.sides.e, prev_global_borders.sides.e, src_dim.x);
 		border_delta.sides.w = calc_wrapped_delta(global_borders.sides.w, prev_global_borders.sides.w, src_dim.x);
 
+
+		// At scroll speeds > 8px, we have offset errors by 1 when scrolling east and south
+		// My idea is, that this is because, for this direction we need to adjust the end part as well
 		if(border_delta.sides.e > 0){
 			dest_end.x = local_borders.sides.e;
 			dest_start.x = (dest_end.x - 1) & (NO_TILES - 1); 
+			dest_start.x = static_cast<u16>(math_mod<int>((int)dest_end.x - border_delta.sides.e, NO_TILES)); 
 
 			dest_start.y = local_borders.sides.n; 
 			dest_end.y = local_borders.sides.s; 
 
 			// We might not need math_mod, regular "& mod should suffice, if we never go below 0"
-			src_start.x = math_mod<int>(global_borders.sides.e - 1, src_dim.x);
+			//FIX For east and south, we need to subtract the delta, as we write from left to right
+			// for w this is not needed, as the border already starts from the left
+			src_start.x = math_mod<int>(global_borders.sides.e - border_delta.sides.e, src_dim.x);
 			src_start.y = math_mod<int>(global_borders.sides.n, src_dim.y);
+
 
 			drawStripe(bg, e_map, dest_start, dest_end, src_start, src_dim);
 			last_dir = 3;
@@ -228,6 +244,7 @@ int main(void) {
 		else if(border_delta.sides.w < 0){
 			dest_start.x = local_borders.sides.w; 
 			dest_end.x = (dest_start.x + 1) & (NO_TILES - 1);
+			dest_end.x = static_cast<u16>(math_mod<int>((int)dest_start.x - border_delta.sides.w, NO_TILES)); 
 
 			dest_start.y = local_borders.sides.n; 
 			dest_end.y = local_borders.sides.s; 
@@ -246,12 +263,13 @@ int main(void) {
 		if(border_delta.sides.s > 0){
 			dest_end.y = local_borders.sides.s;
 			dest_start.y = (dest_end.y - 1) & (NO_TILES - 1);
+			dest_start.y = static_cast<u16>(math_mod<int>((int)dest_end.y - border_delta.sides.s, NO_TILES)); 
 
 			dest_start.x = local_borders.sides.w; 
 			dest_end.x = local_borders.sides.e; 
 
 			src_start.x = math_mod<int>(global_borders.sides.w, src_dim.x);
-			src_start.y = math_mod<int>(global_borders.sides.s -1, src_dim.y);
+			src_start.y = math_mod<int>(global_borders.sides.s - border_delta.sides.s, src_dim.y);
 
 			drawStripe(bg, e_map, dest_start, dest_end, src_start, src_dim);
 			last_dir = 6;
@@ -260,7 +278,7 @@ int main(void) {
 		else if(border_delta.sides.n < 0){
 			dest_start.y = local_borders.sides.n;
 			dest_end.y = (dest_start.y + 1) & (NO_TILES - 1);
-
+			dest_end.y = static_cast<u16>(math_mod<int>((int)dest_start.y - border_delta.sides.n, NO_TILES)); 
 
 			dest_start.x = local_borders.sides.w; 
 			dest_end.x = local_borders.sides.e; 
@@ -283,14 +301,12 @@ int main(void) {
 		iprintf("LB: N%i, S%i, E%i, W%i\n", local_borders.sides.n, local_borders.sides.s, local_borders.sides.e, local_borders.sides.w);
 		iprintf("GB: N%i, S%i, E%i, W%i\n", global_borders.sides.n, global_borders.sides.s, global_borders.sides.e, global_borders.sides.w);
 		iprintf("P.GB: N%i, S%i, E%i, W%i\n", prev_global_borders.sides.n, prev_global_borders.sides.s, prev_global_borders.sides.e, prev_global_borders.sides.w);
+		iprintf("Bound.D N%i, S%i, E%i, W%i\n", border_delta.sides.n, border_delta.sides.s, border_delta.sides.e, border_delta.sides.w);
 		iprintf("Last dir: %i\n", last_dir);
 		bgUpdate();
 
 		swiWaitForVBlank();
 
 	};
-
-	
-	
 
 }
