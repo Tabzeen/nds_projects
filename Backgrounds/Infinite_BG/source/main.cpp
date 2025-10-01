@@ -177,9 +177,9 @@ int main(void) {
 	//Just used for Debugging
 	int last_dir = 0;
 	// Supports a Max scroll speed of 8 pixels (Could easily support more, if we take the right delta value)
-	u16 scroll_speed = 6;
+	u16 scroll_speed = 3;
 	
-	u16 limit_scroll = 0;
+	u16 limit_scroll = 1;
 
 	center_tile = {global_pos.x >> 3, global_pos.y >> 3};
 
@@ -204,10 +204,11 @@ int main(void) {
 		u16 kHeld = keysHeld();
 		// We need to watch out here, so the scroll speed does not vary and jump over the threshold anyway
 		// It does some wierd shaking when we are at the border and hold L + R or U + D
-        if (kHeld & KEY_UP && (!limit_scroll || (global_borders.sides.n != src_dim.y - 1))) global_pos.y -= (1 << scroll_speed);
-        else if (kHeld & KEY_DOWN && (!limit_scroll || (global_borders.sides.s < src_dim.y - 1))) global_pos.y += (1 << scroll_speed);
-        if (kHeld & KEY_LEFT && (!limit_scroll || (global_borders.sides.w != src_dim.x - 1))) global_pos.x -= (1 << scroll_speed);
-        else if (kHeld & KEY_RIGHT && (!limit_scroll || (global_borders.sides.e < src_dim.x - 1))) global_pos.x += (1 << scroll_speed);
+		//TODO Scroll limit should be determined by global_pos and screen sizes instead of the border 
+        if (kHeld & KEY_UP && (!limit_scroll || (global_pos.y - SCREEN_CENTER_Y > 0))) global_pos.y -= (1 << scroll_speed);
+        else if (kHeld & KEY_DOWN && (!limit_scroll || (global_pos.y + SCREEN_CENTER_Y < (src_dim.y << 3)))) global_pos.y += (1 << scroll_speed);
+        if (kHeld & KEY_LEFT && (!limit_scroll || (global_pos.x - SCREEN_CENTER_X > 0))) global_pos.x -= (1 << scroll_speed);
+        else if (kHeld & KEY_RIGHT && (!limit_scroll || (global_pos.x + SCREEN_CENTER_X < (src_dim.x << 3)))) global_pos.x += (1 << scroll_speed);
 
 
 		// Adjust for VRAM size
