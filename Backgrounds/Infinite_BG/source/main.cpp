@@ -50,12 +50,12 @@ struct Vector_2D{
 template <typename T>
 union Boundary{
 	struct {
-		u16 n;
-		u16 s;
-		u16 e;
-		u16 w;
+		T n;
+		T s;
+		T e;
+		T w;
 	} sides;
-	u16 mem[4];
+	T mem[4];
 };
 
 // Converts axes coordinates, to coordinates of the tile in VRAM
@@ -112,7 +112,11 @@ void drawStripe(int bg_id, u16* src_tilemap, Vector_2D<u16> dest_start, Vector_2
 }
 
 
-
+int calc_wrapped_delta(int curr, int prev, int dim){
+	int delta = curr - prev;
+	delta = math_mod<int>(delta + (dim >> 1), dim) - (dim >> 1);
+	return delta;
+}
 
 //---------------------------------------------------------------------------------
 int main(void) {
@@ -143,9 +147,6 @@ int main(void) {
 	*(BG_PALETTE) = (0x1F << RED) | (0x0A << GREEN) | (0x00 << BLUE);
 	*(BG_PALETTE + 1) = (0x00 << RED) | (0x1F << GREEN) | (0x1F << BLUE);  
 	
-	//bgScroll(bg, SCREEN_CENTER_X, SCREEN_CENTER_Y);
-	bgScroll(bg, BG_SIZE - SCREEN_SIZE_X, 0);
-	bgUpdate();
 
 	// Init Global and Local positons
 	// Global pos describes the position on the full tilemap
@@ -167,21 +168,19 @@ int main(void) {
 	Boundary<u16> local_borders = {0, 0, 0, 0};
 	Boundary<int> global_borders = {0, 0, 0, 0};
 	Boundary<int> prev_global_borders = global_borders;
-
+	Boundary<int> border_delta = global_borders;
 	// Check if The Screen has rolled over around the ROM map, for loop over calculations
-	Vector_2D<u16> has_rolled = {0, 0};
 	// Holds the absolute bounds which is either INT32_MAX or the size of the ROM map 
 	//NOTE The issue here is, that while we support very big BGs, they dont allow looping around infinitely
 	drawStripe(bg, e_map, dest_start, dest_end, src_start, src_dim);
 
+	//Just used for Debugging
 	int last_dir = 0;
-	u16 scroll_speed = 2;
+	// Supports a Max scroll speed of 8 tiles (Could easily support more, if we take the right delta value)
+	u16 scroll_speed = 3;
 	
-	u16 limit_scroll = 0;
+	u16 limit_scroll = 1;
 
-
-	//NOTE: Ironically this procedure cannot support infinite backgrounds, due to the way that bound checking is handled
-	// For this I need to fix the comparison algorithm around the edges
 	while(1){
 		
 		center_tile = {global_pos.x >> 3, global_pos.y >> 3};
@@ -191,16 +190,14 @@ int main(void) {
 		global_borders.sides.e = (center_tile.x + SCREEN_CENTER_X_TILES + 1) & (src_dim.x - 1);
 		global_borders.sides.w = (center_tile.x - SCREEN_CENTER_X_TILES - 1) & (src_dim.x - 1);
 		
-		has_rolled.x = global_borders.sides.e < global_borders.sides.w;
-		has_rolled.y = global_borders.sides.s < global_borders.sides.n;
-		
 		scanKeys();
-		
+			
 		u16 kHeld = keysHeld();
 		// We need to watch out here, so the scroll speed does not vary and jump over the threshold anyway
-        if (kHeld & KEY_UP && (!limit_scroll || (global_borders.sides.n > 0))) global_pos.y -= (1 << scroll_speed);
+		// It does some wierd shaking when we are at the border and hold L + R or U + D
+        if (kHeld & KEY_UP && (!limit_scroll || (global_borders.sides.n != src_dim.y - 1))) global_pos.y -= (1 << scroll_speed);
         else if (kHeld & KEY_DOWN && (!limit_scroll || (global_borders.sides.s < src_dim.y - 1))) global_pos.y += (1 << scroll_speed);
-        if (kHeld & KEY_LEFT && (!limit_scroll || (global_borders.sides.w > 0))) global_pos.x -= (1 << scroll_speed);
+        if (kHeld & KEY_LEFT && (!limit_scroll || (global_borders.sides.w != src_dim.x - 1))) global_pos.x -= (1 << scroll_speed);
         else if (kHeld & KEY_RIGHT && (!limit_scroll || (global_borders.sides.e < src_dim.x - 1))) global_pos.x += (1 << scroll_speed);
 
 
@@ -210,8 +207,11 @@ int main(void) {
 			
 		// Backgroud update logic 
 		bgSetScroll(bg, global_pos.x - SCREEN_CENTER_X, global_pos.y - SCREEN_CENTER_Y);
-			
-		if(global_borders.sides.e + has_rolled.x * src_dim.x > prev_global_borders.sides.e){
+		
+		border_delta.sides.e = calc_wrapped_delta(global_borders.sides.e, prev_global_borders.sides.e, src_dim.x);
+		border_delta.sides.w = calc_wrapped_delta(global_borders.sides.w, prev_global_borders.sides.w, src_dim.x);
+
+		if(border_delta.sides.e > 0){
 			dest_end.x = local_borders.sides.e;
 			dest_start.x = (dest_end.x - 1) & (NO_TILES - 1); 
 
@@ -225,7 +225,7 @@ int main(void) {
 			drawStripe(bg, e_map, dest_start, dest_end, src_start, src_dim);
 			last_dir = 3;
 		}
-		else if(global_borders.sides.w < prev_global_borders.sides.w + has_rolled.x * src_dim.x){
+		else if(border_delta.sides.w < 0){
 			dest_start.x = local_borders.sides.w; 
 			dest_end.x = (dest_start.x + 1) & (NO_TILES - 1);
 
@@ -239,7 +239,11 @@ int main(void) {
 			last_dir = 9;
 	
 		}
-		if(global_borders.sides.s + has_rolled.y * src_dim.y > prev_global_borders.sides.s){
+
+		border_delta.sides.n = calc_wrapped_delta(global_borders.sides.n, prev_global_borders.sides.n, src_dim.y);
+		border_delta.sides.s = calc_wrapped_delta(global_borders.sides.s, prev_global_borders.sides.s, src_dim.y);
+
+		if(border_delta.sides.s > 0){
 			dest_end.y = local_borders.sides.s;
 			dest_start.y = (dest_end.y - 1) & (NO_TILES - 1);
 
@@ -253,7 +257,7 @@ int main(void) {
 			last_dir = 6;
 	
 		}
-		else if(global_borders.sides.n < prev_global_borders.sides.n + has_rolled.y * src_dim.y){
+		else if(border_delta.sides.n < 0){
 			dest_start.y = local_borders.sides.n;
 			dest_end.y = (dest_start.y + 1) & (NO_TILES - 1);
 
@@ -280,7 +284,6 @@ int main(void) {
 		iprintf("GB: N%i, S%i, E%i, W%i\n", global_borders.sides.n, global_borders.sides.s, global_borders.sides.e, global_borders.sides.w);
 		iprintf("P.GB: N%i, S%i, E%i, W%i\n", prev_global_borders.sides.n, prev_global_borders.sides.s, prev_global_borders.sides.e, prev_global_borders.sides.w);
 		iprintf("Last dir: %i\n", last_dir);
-		iprintf("Has Rolled %i, %i", has_rolled.x, has_rolled.y);
 		bgUpdate();
 
 		swiWaitForVBlank();
