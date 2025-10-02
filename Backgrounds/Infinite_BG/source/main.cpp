@@ -1,10 +1,8 @@
 #include <nds.h>
-
 #include <stdio.h>
 #include "ExportedTilemap.h"
 #include "emap.h"
 #include "BG_Tiles.h"
-
 
 #define RED 0
 #define GREEN 6
@@ -14,7 +12,6 @@
 #define SCREEN_SIZE_Y 192
 #define BG_SIZE 512
 #define BG_CENTER 256
-
 #define SCREEN_CENTER_X (SCREEN_SIZE_X >> 1)
 #define SCREEN_CENTER_Y (SCREEN_SIZE_Y >> 1)
 
@@ -22,22 +19,12 @@
 #define SCREEN_CENTER_Y_TILES (SCREEN_CENTER_Y >> 3) 
 
 #define NO_TILES (512>>3) 
+
+#define BG_WIDTH 512
+#define BG_HEIGHT 256
+#define NO_TILES_X (512 >> 3)
+#define NO_TILES_Y (256 >> 3)
 #define VRAM_BLOCK_SIZE (32*32)
-
-static u16 tilemap[(NO_TILES) * (NO_TILES)];
-
-
-static u16 metatile[9] = {
-	0x0001, 0x0002, 0x0003,
-	0x0004, 0x0005, 0x0006,
-	0x0007, 0x0008, 0x0009
-};
-
-static u16 test_tile[9] = {
-	0x01, 0x00, 0x00,
-	0x00, 0x01, 0x00,
-	0x01, 0x00, 0x01
-};
 
 template <typename T>
 struct Vector_2D{
@@ -45,8 +32,6 @@ struct Vector_2D{
 	T y;
 };
 
-
-//TODO Rename to "Render Boundry" or just "Boundry"
 template <typename T>
 union Boundary{
 	struct {
@@ -63,7 +48,7 @@ union Boundary{
 // This one assumes that the BG Register is set to 512x512
 u16 convert_coords(u16 x, u16 y){
 	// Wrap around VRAM size. Assumes 64 tiles in each direction
-	x &= (NO_TILES - 1); y &= (NO_TILES - 1); 
+	x &= (NO_TILES_X - 1); y &= (NO_TILES_Y - 1); 
 	int ch_off = (x >> 5) + ((y >> 5) << 1);
 	// Same as x % 31, but doesn't crash
 	x &= 31; y &= 31;
@@ -93,11 +78,13 @@ T math_mod(T a, T b){
 
 // Draws a stripe of predefined dimensions from ROM to VRAM 
 //NOTE, The Mod calculation here might be redundant now, now that we actually modulo in the main loop
+//TODO Rewrite to use DMA copy for y writes. This would avoid the second loop nest
+//Will be really easy, as we only have to consider the y axis when we use the 512x256 VRAM Map  
 void drawStripe(int bg_id, u16* src_tilemap, Vector_2D<u16> dest_start, Vector_2D<u16> dest_end, Vector_2D<int> src_start, Vector_2D<int> src_dim){
 	u32 stripe_width  =  dest_start.x < dest_end.x ? dest_end.x - dest_start.x :
-		dest_end.x + NO_TILES - (dest_start.x & (NO_TILES - 1));
+		dest_end.x + NO_TILES_X - (dest_start.x & (NO_TILES_X - 1));
    	u32 stripe_height = dest_start.y < dest_end.y ? dest_end.y - dest_start.y :  
-		dest_end.y + NO_TILES - (dest_start.y & (NO_TILES - 1));			
+		dest_end.y + NO_TILES_Y - (dest_start.y & (NO_TILES_Y - 1));			
 	for(int i = 0; i < stripe_width; i++){
 		for(int j = 0; j < stripe_height; j++){
 			// For single bytes a CPU copy is faster. Assumes 8bpp
@@ -135,7 +122,7 @@ int main(void) {
 	// See page 101
 	// Set BG Flag registers for expected data
 	// Returns the id of the BG, which is a libnds concept used for BG functions 
-	int bg = bgInit(0, BgType_Text8bpp, BgSize_T_512x512, 0, 1); 
+	int bg = bgInit(0, BgType_Text8bpp, BgSize_T_512x256, 0, 1); 
 	
 	// For debugging we just override the original palette and tiles for now
 	// override the tiles to point to a simple color value each
@@ -158,7 +145,7 @@ int main(void) {
 	// BGScroll describes the scrolling position and is derived from the scrolling position (may be redundant to local pos)
 	Vector_2D<u16> bg_scroll = {0,0};
 	// Holds the Position of the current center tile	
-	Vector_2D<u16> center_tile = {0,0};
+	Vector_2D<u16> center_tile = {global_pos.x >> 3, global_pos.y >> 3};
 
 	Vector_2D<u16> dest_start = {0, 0};
 	Vector_2D<u16> dest_end = {(SCREEN_SIZE_X >> 3) + 1, (SCREEN_SIZE_Y >> 3) + 1};
@@ -166,29 +153,24 @@ int main(void) {
 	Vector_2D<int> src_dim = {128, 128};
 	// Define all local borders, initialized during loop
 	Boundary<u16> local_borders = {0, 0, 0, 0};
-	Boundary<int> global_borders = {0, 0, 0, 0};
+	Boundary<int> global_borders;
+	global_borders.sides.n = (center_tile.y - SCREEN_CENTER_Y_TILES - 1) & (src_dim.y - 1); 
+	global_borders.sides.s = (center_tile.y + SCREEN_CENTER_Y_TILES + 1) & (src_dim.y - 1);
+	global_borders.sides.e = (center_tile.x + SCREEN_CENTER_X_TILES + 1) & (src_dim.x - 1);
+	global_borders.sides.w = (center_tile.x - SCREEN_CENTER_X_TILES - 1) & (src_dim.x - 1);
 	Boundary<int> prev_global_borders = global_borders;
-	Boundary<int> border_delta = global_borders;
+	Boundary<int> border_delta = {0, 0, 0, 0};
 	// Check if The Screen has rolled over around the ROM map, for loop over calculations
 	// Holds the absolute bounds which is either INT32_MAX or the size of the ROM map 
 	//NOTE The issue here is, that while we support very big BGs, they dont allow looping around infinitely
 	drawStripe(bg, e_map, dest_start, dest_end, src_start, src_dim);
 
-	//Just used for Debugging
+	//Used for Debugging to determine the previous movement direction  
 	int last_dir = 0;
-	// Supports a Max scroll speed of 8 pixels (Could easily support more, if we take the right delta value)
+	// Set scroll speed. Defines the exp of 2, as only mutliples of 2 are supported as scroll speed 
 	u16 scroll_speed = 3;
 	
-	u16 limit_scroll = 1;
-
-	center_tile = {global_pos.x >> 3, global_pos.y >> 3};
-
-	global_borders.sides.n = (center_tile.y - SCREEN_CENTER_Y_TILES - 1) & (src_dim.y - 1); 
-	global_borders.sides.s = (center_tile.y + SCREEN_CENTER_Y_TILES + 1) & (src_dim.y - 1);
-	global_borders.sides.e = (center_tile.x + SCREEN_CENTER_X_TILES + 1) & (src_dim.x - 1);
-	global_borders.sides.w = (center_tile.x - SCREEN_CENTER_X_TILES - 1) & (src_dim.x - 1);
-
-	prev_global_borders.sides = global_borders.sides;
+	u16 limit_scroll = 0;
 
 	while(1){
 		
@@ -204,7 +186,6 @@ int main(void) {
 		u16 kHeld = keysHeld();
 		// We need to watch out here, so the scroll speed does not vary and jump over the threshold anyway
 		// It does some wierd shaking when we are at the border and hold L + R or U + D
-		//TODO Scroll limit should be determined by global_pos and screen sizes instead of the border 
         if (kHeld & KEY_UP && (!limit_scroll || (global_pos.y - SCREEN_CENTER_Y > 0))) global_pos.y -= (1 << scroll_speed);
         else if (kHeld & KEY_DOWN && (!limit_scroll || (global_pos.y + SCREEN_CENTER_Y < (src_dim.y << 3)))) global_pos.y += (1 << scroll_speed);
         if (kHeld & KEY_LEFT && (!limit_scroll || (global_pos.x - SCREEN_CENTER_X > 0))) global_pos.x -= (1 << scroll_speed);
@@ -213,8 +194,8 @@ int main(void) {
 
 		// Adjust for VRAM size
 		for(int i = 0; i < 4; i++) 
-			local_borders.mem[i] = static_cast<u16>(math_mod<int>(global_borders.mem[i], NO_TILES));
-			
+			local_borders.mem[i] = i < 2 ? static_cast<u16>(math_mod<int>(global_borders.mem[i], NO_TILES_Y)):
+										   static_cast<u16>(math_mod<int>(global_borders.mem[i], NO_TILES_X));
 		// Backgroud update logic 
 		bgSetScroll(bg, global_pos.x - SCREEN_CENTER_X, global_pos.y - SCREEN_CENTER_Y);
 		
@@ -222,12 +203,9 @@ int main(void) {
 		border_delta.sides.w = calc_wrapped_delta(global_borders.sides.w, prev_global_borders.sides.w, src_dim.x);
 
 
-		// At scroll speeds > 8px, we have offset errors by 1 when scrolling east and south
-		// My idea is, that this is because, for this direction we need to adjust the end part as well
 		if(border_delta.sides.e > 0){
 			dest_end.x = local_borders.sides.e;
-			dest_start.x = (dest_end.x - 1) & (NO_TILES - 1); 
-			dest_start.x = static_cast<u16>(math_mod<int>((int)dest_end.x - border_delta.sides.e, NO_TILES)); 
+			dest_start.x = static_cast<u16>(math_mod<int>((int)dest_end.x - border_delta.sides.e, NO_TILES_X)); 
 
 			dest_start.y = local_borders.sides.n; 
 			dest_end.y = local_borders.sides.s; 
@@ -244,8 +222,7 @@ int main(void) {
 		}
 		else if(border_delta.sides.w < 0){
 			dest_start.x = local_borders.sides.w; 
-			dest_end.x = (dest_start.x + 1) & (NO_TILES - 1);
-			dest_end.x = static_cast<u16>(math_mod<int>((int)dest_start.x - border_delta.sides.w, NO_TILES)); 
+			dest_end.x = static_cast<u16>(math_mod<int>((int)dest_start.x - border_delta.sides.w, NO_TILES_X)); 
 
 			dest_start.y = local_borders.sides.n; 
 			dest_end.y = local_borders.sides.s; 
@@ -263,8 +240,7 @@ int main(void) {
 
 		if(border_delta.sides.s > 0){
 			dest_end.y = local_borders.sides.s;
-			dest_start.y = (dest_end.y - 1) & (NO_TILES - 1);
-			dest_start.y = static_cast<u16>(math_mod<int>((int)dest_end.y - border_delta.sides.s, NO_TILES)); 
+			dest_start.y = static_cast<u16>(math_mod<int>((int)dest_end.y - border_delta.sides.s, NO_TILES_Y)); 
 
 			dest_start.x = local_borders.sides.w; 
 			dest_end.x = local_borders.sides.e; 
@@ -278,8 +254,7 @@ int main(void) {
 		}
 		else if(border_delta.sides.n < 0){
 			dest_start.y = local_borders.sides.n;
-			dest_end.y = (dest_start.y + 1) & (NO_TILES - 1);
-			dest_end.y = static_cast<u16>(math_mod<int>((int)dest_start.y - border_delta.sides.n, NO_TILES)); 
+			dest_end.y = static_cast<u16>(math_mod<int>((int)dest_start.y - border_delta.sides.n, NO_TILES_Y)); 
 
 			dest_start.x = local_borders.sides.w; 
 			dest_end.x = local_borders.sides.e; 
@@ -291,9 +266,7 @@ int main(void) {
 			last_dir = 12;
 		}
 
-		for(int i = 0; i < 4; i++)
-			prev_global_borders.mem[i] = global_borders.mem[i];
-		
+		prev_global_borders.sides = global_borders.sides;	
 
 		consoleClear();
 		iprintf("Pos: %i %i\n", global_pos.x, global_pos.y);
@@ -309,5 +282,4 @@ int main(void) {
 		swiWaitForVBlank();
 
 	};
-
 }
