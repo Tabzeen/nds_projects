@@ -68,6 +68,8 @@ Vector_2D<U> vec_sub(Vector_2D<T> a, Vector_2D<T> b){
     };
 }
 
+// Correctly maps negative numbers to their mod value
+// Expects a positive mod
 template <typename T>
 T math_mod(T a, T b){
 	if(b < 0) return 0;
@@ -77,16 +79,16 @@ T math_mod(T a, T b){
 }
 
 // Draws a stripe of predefined dimensions from ROM to VRAM 
-//NOTE, The Mod calculation here might be redundant now, now that we actually modulo in the main loop
-//TODO Rewrite to use DMA copy for y writes. This would avoid the second loop nest
-//Will be really easy, as we only have to consider the y axis when we use the 512x256 VRAM Map  
+//NOTE: It was initially intended to be improved via direct DMA copies. However this would come with much additional workload for cases
+// Where it's often faster to just use the CPU directly, as mostly only write single half words anyway. 
+// This could be reworked later, when I have the interest to do so. No knowledge outside this function is needed to fix it anyway making it easier to pick up again
 void drawStripe(int bg_id, u16* src_tilemap, Vector_2D<u16> dest_start, Vector_2D<u16> dest_end, Vector_2D<int> src_start, Vector_2D<int> src_dim){
 	u32 stripe_width  =  dest_start.x < dest_end.x ? dest_end.x - dest_start.x :
 		dest_end.x + NO_TILES_X - (dest_start.x & (NO_TILES_X - 1));
    	u32 stripe_height = dest_start.y < dest_end.y ? dest_end.y - dest_start.y :  
 		dest_end.y + NO_TILES_Y - (dest_start.y & (NO_TILES_Y - 1));			
-	for(int i = 0; i < stripe_width; i++){
-		for(int j = 0; j < stripe_height; j++){
+	for(int j = 0; j < stripe_height; j++){
+		for(int i = 0; i < stripe_width; i++){
 			// For single bytes a CPU copy is faster. Assumes 8bpp
 			// Converts the normal mapping to the 32x32 chunck mapping of tile_idx values loaded by the 2D engine from the VRAM
 			u16 addr = convert_coords(dest_start.x + i, dest_start.y + j);
@@ -98,7 +100,7 @@ void drawStripe(int bg_id, u16* src_tilemap, Vector_2D<u16> dest_start, Vector_2
 	}
 }
 
-
+// Calculates the correct delta 
 int calc_wrapped_delta(int curr, int prev, int dim){
 	int delta = curr - prev;
 	delta = math_mod<int>(delta + (dim >> 1), dim) - (dim >> 1);
@@ -138,12 +140,8 @@ int main(void) {
 	// Init Global and Local positons
 	// Global pos describes the position on the full tilemap
 	Vector_2D<u16> global_pos = {SCREEN_CENTER_X, SCREEN_CENTER_Y};
-	// Previous global pos at the last load to calculate delta
-	Vector_2D<u16> prev_global_pos = global_pos; 
 	// Local position describes the position on the VRAM, should just be the global pos mod' with the BG size
 	Vector_2D<u16> local_pos = {0, 0};
-	// BGScroll describes the scrolling position and is derived from the scrolling position (may be redundant to local pos)
-	Vector_2D<u16> bg_scroll = {0,0};
 	// Holds the Position of the current center tile	
 	Vector_2D<u16> center_tile = {global_pos.x >> 3, global_pos.y >> 3};
 
@@ -160,16 +158,14 @@ int main(void) {
 	global_borders.sides.w = (center_tile.x - SCREEN_CENTER_X_TILES - 1) & (src_dim.x - 1);
 	Boundary<int> prev_global_borders = global_borders;
 	Boundary<int> border_delta = {0, 0, 0, 0};
-	// Check if The Screen has rolled over around the ROM map, for loop over calculations
-	// Holds the absolute bounds which is either INT32_MAX or the size of the ROM map 
-	//NOTE The issue here is, that while we support very big BGs, they dont allow looping around infinitely
+
 	drawStripe(bg, e_map, dest_start, dest_end, src_start, src_dim);
 
 	//Used for Debugging to determine the previous movement direction  
 	int last_dir = 0;
 	// Set scroll speed. Defines the exp of 2, as only mutliples of 2 are supported as scroll speed 
 	u16 scroll_speed = 3;
-	
+	// Limit the scrolling to the source map size
 	u16 limit_scroll = 0;
 
 	while(1){
@@ -211,8 +207,6 @@ int main(void) {
 			dest_end.y = local_borders.sides.s; 
 
 			// We might not need math_mod, regular "& mod should suffice, if we never go below 0"
-			//FIX For east and south, we need to subtract the delta, as we write from left to right
-			// for w this is not needed, as the border already starts from the left
 			src_start.x = math_mod<int>(global_borders.sides.e - border_delta.sides.e, src_dim.x);
 			src_start.y = math_mod<int>(global_borders.sides.n, src_dim.y);
 
