@@ -1,0 +1,14 @@
+CompileFlags:
+  Remove: ["-mthumb-interwork"]
+  Add: [
+    "-I${workspaceFolder}/source",
+    "-I/opt/devkitpro/libnds/include",
+    "-I/opt/devkitpro/devkitARM/include",
+    "-I/opt/devkitpro/devkitARM/arm-none-eabi/include",
+    "-I/opt/devkitpro/calico/include",
+    "-DARM9",
+    "-D__NDS__",
+    "-std=gnu++17",
+    "-xc++"
+  ]
+  QueryDriver: ["/opt/devkitpro/devkitARM/bin/arm-none-eabi-*"]

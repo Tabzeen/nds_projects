@@ -1,0 +1,33 @@
+[
+  {
+    "arguments": [
+      "/opt/devkitpro/devkitARM/bin/arm-none-eabi-g++",
+      "-D__NDS__",
+      "-I/opt/devkitpro/calico/include",
+      "-g",
+      "-Wall",
+      "-O3",
+      "-marm",
+      "-mthumb-interwork",
+      "-march=armv5te",
+      "-mtune=arm946e-s",
+      "-iquote",
+      "/home/talgat/Dokumente/nds_projects/Backgrounds/Flex_Dialouge/include",
+      "-I/opt/devkitpro/libnds/include",
+      "-I/opt/devkitpro/portlibs/nds/include",
+      "-I/opt/devkitpro/portlibs/armv5te/include",
+      "-I/opt/devkitpro/portlibs/armv4t/include",
+      "-I/home/talgat/Dokumente/nds_projects/Backgrounds/Flex_Dialouge/build",
+      "-DARM9",
+      "-fno-rtti",
+      "-fno-exceptions",
+      "-c",
+      "-o",
+      "main.o",
+      "/home/talgat/Dokumente/nds_projects/Backgrounds/Flex_Dialouge/source/main.cpp"
+    ],
+    "directory": "/home/talgat/Dokumente/nds_projects/Backgrounds/Flex_Dialouge/build",
+    "file": "/home/talgat/Dokumente/nds_projects/Backgrounds/Flex_Dialouge/source/main.cpp",
+    "output": "/home/talgat/Dokumente/nds_projects/Backgrounds/Flex_Dialouge/build/main.o"
+  }
+]
