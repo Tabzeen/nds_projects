@@ -1,19 +1,22 @@
 import cv2
+from PIL import Image, ImageDraw, ImageFont
 import numpy as np
 
-bmp_font = cv2.imread("CharSet.png", cv2.IMREAD_UNCHANGED)
 
-alpha_mask = (bmp_font[:, :, 3] > 0).astype(np.uint8) * 255
+# TODO
+# Create a 1 Bit font, and add an optional dropshadow, which is just the font shifted by (1,1)
 
-alpha_mask = cv2.dilate(alpha_mask, kernel = np.ones((3,3), np.uint8))
+ttf_font = ImageFont.truetype("./ByteBounce.ttf", 28)
 
-num_labels, lables, stats, centroids = cv2.connectedComponentsWithStats(alpha_mask)
+image = Image.new('1', (100,100), color='white')
 
-max_width = np.max(stats[1:,2])
-max_height = np.max(stats[1:,3])
-print(max_width, max_height)
-for i in range(1, num_labels):
-    x, y, w, h, area = stats[i]
-    glyph = np.zeros((max_height, max_width, 4))
-    glyph[0:h-2, 0:w-2] = bmp_font[y+1:y+h-1, x+1:x+w-1]  # Crop the blob
-    cv2.imwrite(f"glyphs/glyph_{i}.png", glyph)
+draw = ImageDraw.Draw(image)
+
+draw.text((0,0), "Hello", font = ttf_font, fill='black', anchor='lt')
+
+image_np = np.array(image)
+black_px = image_np[image_np == 1]
+min_y, max_y = (np.min(black_px[0]), np.max(black_px[0]))
+min_x, max_x = (np.min(black_px[1]), np.max(black_px[1]))
+
+
