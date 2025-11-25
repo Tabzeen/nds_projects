@@ -1,6 +1,7 @@
 import cv2
 from PIL import Image, ImageDraw, ImageFont
 import numpy as np
+import matplotlib.pyplot as plt
 
 
 # TODO
@@ -33,7 +34,13 @@ for i in range(len(ascii_arr)):
 
 image_np = np.array(image)
 
-col_h = not image_np.all(axis=1) 
+col_h =  1 - image_np.all(axis=1) 
 min_y, max_y = (np.where(col_h)[0], np.where(col_h)[-1])
 
-col_w = not image_np.all(axis=0)
+col_w = 1 - image_np.all(axis=0)
+col_w = col_w.reshape(-1, bound_w)
+
+char_width = [np.where(x)[0][-1] + 1 for x in col_w]
+
+plt.imshow(col_w)
+plt.show()
