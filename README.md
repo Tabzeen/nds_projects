@@ -1,2 +1,10 @@
-#### A Collection of small Proof-of-Concept projects targeting Nintendo DS Hardware
-This repositify contains projects with the goal of exploring and learning different aspects of the Nintendo DS hardware.
+## A Collection of Small Proof-of-Concept Projects Targeting Nintendo DS Hardware
+This repository contains projects aimed at exploring and learning different aspects of the Nintendo DS hardware.
+
+### Directory Structure
+* **Backgrounds:** Projects targeting the device's fixed graphics pipeline and VRAM management.
+  * **Parallax:** A simple demo utilizing all VRAM banks to display a parallax scrolling animation.
+  * **Infinite_Background:** A demo that renders a larger tilemap than the architecture natively supports by streaming it into VRAM on demand.
+  * **Flex_Dialogue:** A demo showcasing a custom compact font format and a custom rendering engine. This engine allows the runtime display of two-color, variable-width custom fonts at various scaling resolutions.
+* **Sprite Modes:** Projects targeting the Nintendo DS sprite rendering engine and its animation capabilities.
+* **Font_Generator:** A tool that converts TrueType fonts (.ttf) into a custom NTFT format, which can then be parsed by the custom rendering engine.
