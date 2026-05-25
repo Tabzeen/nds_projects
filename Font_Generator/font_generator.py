@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 # This gives us the same PNG where we can deduct the character max height and relative posiitoning
 # by Collapsing the X and Y axis respectively.  
 
-ttf_font = ImageFont.truetype("./ByteBounce.ttf", 28)
+ttf_font = ImageFont.truetype("./PMD.ttf", 16)
 
 bound_w = 30
 bound_h = 50
@@ -35,12 +35,37 @@ for i in range(len(ascii_arr)):
 image_np = np.array(image)
 
 col_h =  1 - image_np.all(axis=1) 
-min_y, max_y = (np.where(col_h)[0], np.where(col_h)[-1])
+min_y, max_y = (np.where(col_h)[0][0], np.where(col_h)[0][-1])
 
 col_w = 1 - image_np.all(axis=0)
 col_w = col_w.reshape(-1, bound_w)
 
 char_width = [np.where(x)[0][-1] + 1 for x in col_w]
+#Crop Y axis of image
+image_np = image_np[min_y:max_y,:]
 
-plt.imshow(col_w)
+char_arr = []
+for c_idx in range(len(char_width)):
+    char_arr.append(image_np[:,c_idx * bound_w: c_idx * bound_w + char_width[c_idx]])
+
+
+# Test printing of the Characters
+t_img = np.ones((max_y - min_y, 200))
+t_str = "HELLOWORLD"
+t_stride = 1
+i_inc = 0
+
+for s in t_str:
+    str_id = ord(s) - 0x21
+    chr_w = char_width[str_id]
+    t_img[:,i_inc:i_inc + chr_w] = char_arr[str_id]
+    i_inc += chr_w + t_stride
+'''
+ Writing to a binary:
+ We need a file header
+ In total: Magic Number, Font Dim, 
+ Byte 0-3 Magic Number 4E 46 4E 54 = N F N T (NitroFoNT)
+'''
+
+plt.imshow(t_img)
 plt.show()
