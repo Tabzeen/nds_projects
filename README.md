@@ -1,5 +1,5 @@
 ## A Collection of Small Proof-of-Concept Projects Targeting Nintendo DS Hardware
-This repository contains projects aimed at exploring and learning different aspects of the Nintendo DS hardware.
+This repository contains projects aimed at exploring and learning various aspects of the Nintendo DS hardware.
 
 ### Directory Structure
 * **Backgrounds:** Projects targeting the device's fixed graphics pipeline and VRAM management.
