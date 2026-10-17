@@ -1,0 +1,28 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/nds_font_render/**",
+                "${workspaceFolder}/nds_font_render/include/**",
+                "/opt/devkitpro/libnds/include/**",
+                "/opt/devkitpro/devkitARM/include/**",
+                "/opt/devkitpro/devkitARM/arm-none-eabi/include/**",
+                "/opt/devkitpro/calico/include/**",
+                "/opt/devkitpro/**"
+            ],
+            "defines": ["ARM9", "__NDS__"],
+            "compilerPath": "/opt/devkitpro/devkitARM/bin/arm-none-eabi-gcc",
+            "cStandard": "c17",
+            "cppStandard": "gnu++17",
+            "intelliSenseMode": "linux-gcc-arm",
+            "browse" : {
+                "path" : [
+                    "/opt/devkitpro/libnds/include",
+                    "/opt/devkitpro/devkitARM/arm-none-eabi/include"
+                ]
+            }
+        }
+    ],
+    "version": 4
+}
