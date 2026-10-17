@@ -132,6 +132,21 @@ void DialogueEngine::copy_buffer_to_rows(int cursor_x, int cursor_y){
     swiCopy(tileset_copy + tile_size_u32 * 3 * 2, cpy_offset + tile_size_u32 * text_meta.x_width * 2, tile_size_u32 * 3 | COPY_MODE_COPY | COPY_MODE_WORD);
 }
 
+DialogueEngine::DialogueEngine(const CharData* char_data_src, int bg_idx){            
+
+    this->char_data = char_data_src;
+    
+    // Reserve WRAM data for 16x16 fonts + overhead
+    char_wram_row_data = new u32[2 + 1];
+    // Reserve Tilemap copy for a 3x2 block of 8x8 tiles at 4bpp
+    tileset_copy = new u32[(2 + 1) * 16];
+
+    this->bg_idx = bg_idx;
+
+    this->text_meta = {};
+
+}
+
 DialogueEngine::~DialogueEngine(){
     delete[] char_wram_row_data;
     delete[] tileset_copy;
