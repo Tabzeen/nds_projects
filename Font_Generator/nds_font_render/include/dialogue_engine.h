@@ -14,7 +14,10 @@ public:
     ~DialogueEngine();
 
     void init_map_bounds(u8 y_start, u8 y_end, u8 x_start, u8 x_end);
-    void push_char(int idx);
+    void push_char(int idx, bool advance);
+    void push_hello();
+    void set_cursor_position(u8 x, u8 y);
+    void push_ascii_string(char* text);
     void clear();
 
 private:
@@ -26,7 +29,7 @@ private:
         u8 x_width;
         u8 y_width;
         u8 cursor_tile_x;
-        u8 cusor_tile_y;
+        u8 cursor_tile_y;
         u8 cursor_stride_x;
         u8 cursor_stride_y;
     };

@@ -39,14 +39,19 @@ int main(void) {
 
 	DialogueEngine dialogue_engine(char_data, main_bg);
 
-	dialogue_engine.init_map_bounds(0, 10, 0, 15);
-	dialogue_engine.push_char(0);
+	dialogue_engine.init_map_bounds(0, 10, 0, 31);
+	//dialogue_engine.push_hello();
 
+	bool once = false;
 
 	iprintf("Hello World\n");
 	while(1){
 		// Wait for blanking interval
 		swiWaitForVBlank();
+		if(!once){
+			dialogue_engine.push_ascii_string("Hello.World!.This.is.a.text.written.in.my.engine");
+			once = true;
+		}
 
 	};
 }
