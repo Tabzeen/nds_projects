@@ -10,7 +10,7 @@ constexpr u8 tile_size_u32 = 8;
 
 class DialogueEngine {
 public:
-    DialogueEngine(const CharData* char_data_src, int bg_idx);
+    DialogueEngine(const CharData* char_data_src, u16* bg_map_ptr, u16* bg_tile_ptr);
     ~DialogueEngine();
 
     void init_map_bounds(u8 y_start, u8 y_end, u8 x_start, u8 x_end);
@@ -32,23 +32,24 @@ private:
         u8 cursor_tile_y;
         u8 cursor_stride_x;
         u8 cursor_stride_y;
+        u8 space_width;
+        u8 line_advance;
     };
 
     // Private helper methods
     void build_ascii_lut();
     void write_char_to_buffer(int char_idx);
-    void copy_rows_to_buffer(int cursor_x, int cursor_y);
-    void copy_buffer_to_rows(int cursor_x, int cursor_y);
+    void copy_rows_to_buffer();
+    void copy_buffer_to_rows();
 
     // Member variables
     const CharData* char_data;
     u32* char_wram_row_data;
     u32* tileset_copy;
 
-    int tile_offset = 0;
-    int inner_tile_offset = 0;
-    int mem_width;
-    int bg_idx;
+    // Tile Management
+    u16* bg_map_ptr;
+    u16* bg_tile_ptr;   
 
     TextMeta text_meta;
 };

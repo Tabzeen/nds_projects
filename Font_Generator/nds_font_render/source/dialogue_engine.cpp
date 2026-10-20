@@ -9,6 +9,7 @@
 
 
 constexpr auto kTilesPerRow = 32;
+constexpr auto kTilesPerCol = 24;
 
 // We need to reverse inner byte order, as the VRAM reads 
 // the Byte LSb first
@@ -60,8 +61,6 @@ void DialogueEngine::write_char_to_buffer(int char_idx){
         ext_char = ext_char >> text_meta.cursor_stride_x;
         //fprintf(stderr, "Tile data in iteration %i after shift %lx \n", i, ext_char);
         
-        // TODO: this still needs the X and Y stride
-
         // extend 8b -> 32b via LUT and store in 3 registers 
         // Reverse order for writing to VRAM
         char_wram_row_data[0] = lut_1b_to_4b[static_cast<u8>(ext_char >> (tile_size_u32 * 3))];
@@ -91,55 +90,62 @@ void DialogueEngine::write_char_to_buffer(int char_idx){
     Utilizes the initialized text_meta struct. 
     Expects the Tilemap to be initialized to the set boundary
 */ 
-void DialogueEngine::copy_rows_to_buffer(int cursor_x, int cursor_y){
-
-    // We immediately add one to the curstor postion to skip the zero tile
-    cursor_x += 1;
+void DialogueEngine::copy_rows_to_buffer(){
 
     // We need to recast the pointer to 32b, as we store full tile rows
-    u32* bg_base_offset = reinterpret_cast<u32*>(bgGetGfxPtr(bg_idx));
-
-    // Offset of the first target tile
-    // Always shifted by one, as the zeroth tile is empty
-    // It remains 4B aligned as it is offset by 32b
-
-    size_t cursor_offset = tile_size_u32 * (cursor_x + cursor_y * text_meta.x_width);
-    u32* cpy_offset = bg_base_offset + cursor_offset; 
-
-    // Copy the 3 adjacent tiles from the VRAM to WRAM from the first row 
-    swiCopy(cpy_offset, tileset_copy, tile_size_u32 * 3 | COPY_MODE_COPY | COPY_MODE_WORD);
-    // Copy the second row into tileset memory
-    swiCopy(cpy_offset + tile_size_u32 * text_meta.x_width , tileset_copy + tile_size_u32 * 3, tile_size_u32 * 3 | COPY_MODE_COPY | COPY_MODE_WORD);
-    // Copy the third row into tileset memory
-    swiCopy(cpy_offset + tile_size_u32 * text_meta.x_width * 2, tileset_copy + tile_size_u32 * 3 * 2, tile_size_u32 * 3 | COPY_MODE_COPY | COPY_MODE_WORD);
-
-}
-
-void DialogueEngine::copy_buffer_to_rows(int cursor_x, int cursor_y){
+    u32* bg_base_offset = reinterpret_cast<u32*>(bg_tile_ptr);
 
     // We immediately add one to the curstor postion to skip the zero tile
-    cursor_x += 1;
-
-    u32* bg_base_offset = reinterpret_cast<u32*>(bgGetGfxPtr(bg_idx));
-
-    size_t cursor_offset = tile_size_u32 * (cursor_x + cursor_y * text_meta.x_width);
+    size_t cursor_offset = tile_size_u32 * (text_meta.cursor_tile_x + 1 + text_meta.cursor_tile_y * text_meta.x_width);
     u32* cpy_offset = bg_base_offset + cursor_offset; 
 
-    swiCopy(tileset_copy, cpy_offset, tile_size_u32 * 3 | COPY_MODE_COPY | COPY_MODE_WORD);
-    swiCopy(tileset_copy + tile_size_u32 * 3, cpy_offset + tile_size_u32 * text_meta.x_width, tile_size_u32 * 3 | COPY_MODE_COPY | COPY_MODE_WORD);
-    swiCopy(tileset_copy + tile_size_u32 * 3 * 2, cpy_offset + tile_size_u32 * text_meta.x_width * 2, tile_size_u32 * 3 | COPY_MODE_COPY | COPY_MODE_WORD);
+    // Calculate the max offset for memory safety
+    u32* bg_end = bg_base_offset + text_meta.x_width * text_meta.y_width * tile_size_u32;  
+
+    const u32 cpy_size = tile_size_u32 * 3;
+
+    for(int i = 0; i < 3; i++){
+        u32* src = cpy_offset + i * tile_size_u32 * text_meta.x_width;
+        u32* dest = tileset_copy + i * cpy_size;
+
+        if(src + cpy_size <= bg_end)
+            swiCopy(src, dest, cpy_size | COPY_MODE_COPY | COPY_MODE_WORD);
+    }
+
 }
 
-DialogueEngine::DialogueEngine(const CharData* char_data_src, int bg_idx){            
+void DialogueEngine::copy_buffer_to_rows() {
+    u32* bg_base_offset = reinterpret_cast<u32*>(bg_tile_ptr);
+
+    size_t cursor_offset = tile_size_u32 * (text_meta.cursor_tile_x + 1 + text_meta.cursor_tile_y * text_meta.x_width);
+    u32* cpy_offset = bg_base_offset + cursor_offset; 
+
+    u32* bg_end = bg_base_offset + text_meta.x_width * text_meta.y_width * tile_size_u32;  
+
+    const u32 cpy_size = tile_size_u32 * 3;
+
+    for (int i = 0; i < 3; i++) {
+        u32* src  = tileset_copy + i * cpy_size;
+        u32* dest = cpy_offset + i * tile_size_u32 * text_meta.x_width;
+
+        if (dest + cpy_size <= bg_end) {
+            swiCopy(src, dest, cpy_size | COPY_MODE_COPY | COPY_MODE_WORD);
+        }
+    }
+}
+
+DialogueEngine::DialogueEngine(const CharData* char_data_src, u16* bg_map_ptr, u16* bg_tile_ptr){            
+
+    this->bg_map_ptr = bg_map_ptr;
+    this->bg_tile_ptr = bg_tile_ptr;
 
     this->char_data = char_data_src;
     
     // Reserve WRAM data for 16x16 fonts + overhead
-    char_wram_row_data = new u32[2 + 1];
-    // Reserve Tilemap copy for a 3x2 block of 8x8 tiles at 4bpp
-    tileset_copy = new u32[(2 + 1) * 16];
+    char_wram_row_data = new u32[3];
+    // Reserve Tilemap copy for a 3x3 block of 8x8 tiles at 4bpp
+    tileset_copy = new u32[3 * 3 * tile_size_u32];
 
-    this->bg_idx = bg_idx;
 
     this->text_meta = {};
 
@@ -165,33 +171,15 @@ void DialogueEngine::init_map_bounds(u8 y_start, u8 y_end, u8 x_start, u8 x_end)
     text_meta.x_width = x_end - x_start;
     text_meta.y_width = y_end - y_start;
 
-    // Libnds only returns the local offset of a BG, we need to add the 64KB global offset as well
-    u16* base_map_offset = bgGetMapPtr(bg_idx) + 0x8000;
-
-    // Flush the VRAM Tilemap with zeros
-    // Each entry is 2B wide
-    // Lower section of the 32x32 tiles are in overscan
-    u32 zero_hw = 0;
-    swiCopy(&zero_hw, base_map_offset, (24*32 / 2) | COPY_MODE_WORD | COPY_MODE_FILL);
-    iprintf("Base Map offset: %p \n", (void*)base_map_offset);
-
-    // Accumulator for tile indices. Starts at 1 as zero tile is blank
-    u16 tile_idx_acc = 1;
-    for(int i = y_start; i < y_end; i++){
-        for(int j = x_start; j < x_end; j++){
-            *(base_map_offset + i * 32 + j) = tile_idx_acc;
-            tile_idx_acc++;         
-        }
-    }
+    clear();
 }
 
-// Add a "Set Cursor Position" variable
 
 
 void DialogueEngine::push_char(int idx, bool advance){
-    copy_rows_to_buffer(text_meta.cursor_tile_x, text_meta.cursor_tile_y);
+    copy_rows_to_buffer();
     write_char_to_buffer(idx);
-    copy_buffer_to_rows(text_meta.cursor_tile_x, text_meta.cursor_tile_y);
+    copy_buffer_to_rows();
 
     if(advance){
         u8 idx_stride = char_data->char_meta[idx].advance;
@@ -245,4 +233,21 @@ void DialogueEngine::set_cursor_position(u8 x, u8 y){
 
 void DialogueEngine::clear(){
 
+    // Clear entire tilemap first
+    u32 zero_hw = 0;
+    swiCopy(&zero_hw, bg_map_ptr, (kTilesPerCol * kTilesPerRow  / 2) | COPY_MODE_WORD | COPY_MODE_FILL);
+    iprintf("Base Map offset: %p \n", (void*)bg_map_ptr);
+
+    // Clear the entire tileset
+    swiCopy(&zero_hw, bg_tile_ptr, (kTilesPerCol * kTilesPerRow * 8) | COPY_MODE_WORD | COPY_MODE_FILL);
+
+    // Rebuild the tilemap
+    // Accumulator for tile indices. Starts at 1 as zero tile is blank
+    u16 tile_idx_acc = 1;
+    for(int i = text_meta.y_start; i < text_meta.y_end; i++){
+        for(int j = text_meta.x_start; j < text_meta.x_end; j++){
+            *(bg_map_ptr + i * 32 + j) = tile_idx_acc;
+            tile_idx_acc++;         
+        }
+    }
 }

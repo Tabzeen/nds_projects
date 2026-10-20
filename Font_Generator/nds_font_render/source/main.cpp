@@ -37,7 +37,10 @@ int main(void) {
 
 	const CharData* char_data = get_char_data();
 
-	DialogueEngine dialogue_engine(char_data, main_bg);
+	u16* bg_map_ptr = bgGetMapPtr(main_bg) + 0x8000;
+	u16* bg_tile_ptr = bgGetGfxPtr(main_bg);
+
+	DialogueEngine dialogue_engine(char_data, bg_map_ptr, bg_tile_ptr);
 
 	dialogue_engine.init_map_bounds(0, 10, 0, 31);
 	//dialogue_engine.push_hello();
