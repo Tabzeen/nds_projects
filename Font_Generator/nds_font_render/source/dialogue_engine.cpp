@@ -36,54 +36,72 @@ constexpr auto make_lut() {
 constexpr auto lut_1b_to_4b = make_lut();
 
 
-// Note: this needs some way for bondary checking so we do not write out of bounds,
-// Currently it can do very scary stuff
+void DialogueEngine::write_char_to_buffer(u32 char_idx, u8 color, bool shadow){
 
-// We can constraint writes, by simply just checing the write address range
-void DialogueEngine::write_char_to_buffer(int char_idx){
-
+    // Dont write invalid Character idx values
+    sassert(char_idx < char_data->char_cnt, "Invalid Character Accessed!");
     //fprintf(stderr, "Addr of Char data: %p \n", char_wram_row_data);
     int arr_steps = font_dim / 8;
-    for(int i = 0; i < char_data->font_dim; i++){
 
-        const u8* src_addr = &char_data->font_data[char_idx * font_data_elem_size + arr_steps * i];
+    // Perform three passes:
+    // The first one shifts x by +1 to draw a shadow to the right
+    // The second one shifts y by +1 to draw a shadow below
+    // The third pass prints the actual character
+    for(int pass = 0; pass < 3; pass++){
 
-        // Font size is just an 8b int which represents the "actual" font size and is not the real font size
-        //fprintf(stderr, "reading tile data of pointer %p in iteration %i \n", (void*)src_addr, i);
-        // 8px sections of a 16px Character
-        u8 tile_a = *(src_addr);
-        u8 tile_b = *(src_addr + 1);
+        bool shadow_off_x = (pass == 0);
+        bool shadow_off_y = (pass == 1);
 
-        // assemble into a larger u32 Char
-        u32 ext_char = ((static_cast<u32>(tile_a) << 24) | (static_cast<u32>(tile_b) << 16));
-        //fprintf(stderr, "Tile data in iteration %i %lx \n", i, ext_char);
-        // shift by the inner tile offset
-        ext_char = ext_char >> text_meta.cursor_stride_x;
-        //fprintf(stderr, "Tile data in iteration %i after shift %lx \n", i, ext_char);
-        
-        // extend 8b -> 32b via LUT and store in 3 registers 
-        // Reverse order for writing to VRAM
-        char_wram_row_data[0] = lut_1b_to_4b[static_cast<u8>(ext_char >> (tile_size_u32 * 3))];
-        char_wram_row_data[1] = lut_1b_to_4b[static_cast<u8>(ext_char >> (tile_size_u32 * 2))];
-        char_wram_row_data[2] = lut_1b_to_4b[static_cast<u8>(ext_char >>  tile_size_u32)];
+        if(!shadow && pass < 2)
+            continue;
 
-        // Add start offset to iterator
-        u8 offset_i = i + text_meta.cursor_stride_y;
+        // Iterate over Rows
+        for(int i = 0; i < char_data->font_dim; i++){
+            const u8* src_addr = &char_data->font_data[char_idx * font_data_elem_size + arr_steps * i];
 
-        // Determine Tile Row Stride
-        // Outer Row offset
-        u8 row_stride = offset_i >> 3;
-        // Inner row offset
-        u8 row_off = offset_i % 8;
+            // Add start offset to iterator
+            u8 offset_i = i + text_meta.cursor_stride_y + shadow_off_y;
 
-        // OR with the tileset WRAM copy
-        tileset_copy[row_stride * tile_size_u32*3 + row_off      ] |= char_wram_row_data[0];
-        tileset_copy[row_stride * tile_size_u32*3 + row_off + 8  ] |= char_wram_row_data[1];
-        tileset_copy[row_stride * tile_size_u32*3 + row_off + 16 ] |= char_wram_row_data[2];
+            // Determine Tile Row Stride
+            // Outer Row offset
+            u8 row_stride = offset_i >> 3;
+            // Inner row offset
+            u8 row_off = offset_i % 8;
 
+            // Font size is just an 8b int which represents the "actual" font size and is not the real font size
+            //fprintf(stderr, "reading tile data of pointer %p in iteration %i \n", (void*)src_addr, i);
+            // 8px sections of a 16px Character
+            u8 tile_a = *(src_addr);
+            u8 tile_b = *(src_addr + 1);
+
+            // assemble into a larger u32 Char
+            u32 ext_char = ((static_cast<u32>(tile_a) << 24) | (static_cast<u32>(tile_b) << 16));
+
+            // shift by the inner tile offset
+            ext_char = ext_char >> (text_meta.cursor_stride_x + shadow_off_x);
+
+            // iterate over cols 
+            for(int j = 0 ; j < 3; j++){
+
+                // extend 8b -> 32b via LUT and store in 3 registers 
+                // Reverse order for writing to VRAM
+                char_wram_row_data[j] = 
+                    lut_1b_to_4b[static_cast<u8>(ext_char >> (tile_size_u32 * (3 - j)))];
+
+                // Set the override mask, to override the shadow values
+                u32 mask = char_wram_row_data[j] * 0xF;
+
+                // Set Character color, or fix to shadow color
+                char_wram_row_data[j] *= pass < 2 ? 1 : color;
+
+                // Merge with the tileset WRAM copy
+                tileset_copy[row_stride * tile_size_u32*3 + row_off + 8*j ] = 
+                    (tileset_copy[row_stride * tile_size_u32*3 + row_off + 8*j] & ~mask) | char_wram_row_data[j];
+            }
+
+        }
     }   
 }
-
 
 /* 
     Accepts a cursor x and y position and copies a 3x3 tile section from VRAM to WRAM
@@ -162,6 +180,12 @@ DialogueEngine::~DialogueEngine(){
 */
 void DialogueEngine::init_map_bounds(u8 y_start, u8 y_end, u8 x_start, u8 x_end){
 
+    if((y_start >= kTilesPerCol) || (y_end >= kTilesPerCol) || (x_start >= kTilesPerRow) || (x_end >= kTilesPerRow))
+        sassert(0, "Text area out of tilemap bounds!");    
+
+    if((y_start >= y_end) || (x_start >= x_end))
+        sassert(0, "Invalid text area size!");
+
     // Populate the metadata
     text_meta.y_start = y_start;
     text_meta.y_end = y_end;
@@ -171,25 +195,37 @@ void DialogueEngine::init_map_bounds(u8 y_start, u8 y_end, u8 x_start, u8 x_end)
     text_meta.x_width = x_end - x_start;
     text_meta.y_width = y_end - y_start;
 
-    clear();
+
+    clear_tilemap();
+    clear_tileset();
+
+    u16 tile_idx_acc = 1;
+    for(int i = text_meta.y_start; i < text_meta.y_end; i++){
+        for(int j = text_meta.x_start; j < text_meta.x_end; j++){
+            *(bg_map_ptr + i * 32 + j) = tile_idx_acc;
+            tile_idx_acc++;         
+        }
+    }
 }
 
 
-
+// Accepts internal char idx. Does not know the ASCII representation of the character
 void DialogueEngine::push_char(int idx, bool advance){
+    sassert(idx < char_data->char_cnt, "Invalid Char Idx accessed!");
+
     copy_rows_to_buffer();
-    write_char_to_buffer(idx);
+    //write_char_to_buffer(idx);
+    write_char_to_buffer(idx, 2, 1);
     copy_buffer_to_rows();
 
     if(advance){
-        u8 idx_stride = char_data->char_meta[idx].advance;
+        u8 idx_stride = char_data->char_meta[idx].advance + text_meta.kerning;
         // We do a somewhat unnecessary convert here just to convert it back. We might wanna adjust that
         u8 target_stride_x = idx_stride + 8 * text_meta.cursor_tile_x + text_meta.cursor_stride_x;   
         u8 target_y = 8 * text_meta.cursor_tile_y + text_meta.cursor_stride_y;
         set_cursor_position(target_stride_x, target_y);
     }
 }
-
 
 
 
@@ -200,6 +236,8 @@ void DialogueEngine::push_hello(){
     }
 }
 
+// TODO, we need to export a decoder function here, which maps an ASCII string (or any index for what it matters)
+// To the internal Representation
 void DialogueEngine::push_ascii_string(char* text){
     int i = 0;
     while(text[i] != '\0'){
@@ -215,7 +253,11 @@ void DialogueEngine::push_ascii_string(char* text){
 }
 
 
+
 void DialogueEngine::set_cursor_position(u8 x, u8 y){
+
+    if(x / 8 >= text_meta.x_width || y / 8 >= text_meta.y_width)
+        sassert(0, "Invalid cursor position!");
 
     u8 tile_x = x >> 3;
     u8 stride_x = x % 8;
@@ -231,23 +273,28 @@ void DialogueEngine::set_cursor_position(u8 x, u8 y){
     text_meta.cursor_stride_y = stride_y;
 }
 
-void DialogueEngine::clear(){
+// Clears the tileset entires. Does not perform a reconstruction
+// May be called from outside to clear the canvas 
+void DialogueEngine::clear_tileset(){
+
+    // Clear the entire tileset
+    u32 zero_hw = 0;
+    swiCopy(&zero_hw, bg_tile_ptr, (kTilesPerCol * kTilesPerRow * 8) | COPY_MODE_WORD | COPY_MODE_FILL);
+}
+
+// Clears the tilemap enties. Does not perform reconstruction
+// Should only be called by the initialization and never be used from the outside directly 
+void DialogueEngine::clear_tilemap(){
 
     // Clear entire tilemap first
     u32 zero_hw = 0;
     swiCopy(&zero_hw, bg_map_ptr, (kTilesPerCol * kTilesPerRow  / 2) | COPY_MODE_WORD | COPY_MODE_FILL);
-    iprintf("Base Map offset: %p \n", (void*)bg_map_ptr);
 
-    // Clear the entire tileset
-    swiCopy(&zero_hw, bg_tile_ptr, (kTilesPerCol * kTilesPerRow * 8) | COPY_MODE_WORD | COPY_MODE_FILL);
+}
 
-    // Rebuild the tilemap
-    // Accumulator for tile indices. Starts at 1 as zero tile is blank
-    u16 tile_idx_acc = 1;
-    for(int i = text_meta.y_start; i < text_meta.y_end; i++){
-        for(int j = text_meta.x_start; j < text_meta.x_end; j++){
-            *(bg_map_ptr + i * 32 + j) = tile_idx_acc;
-            tile_idx_acc++;         
-        }
-    }
+
+// Approximates from cursor position and inner tile stride if there is still space in a given row
+// Does not accept a character, but just checks if a 16x16 character fits inside the area
+bool DialogueEngine::get_row_full(){
+    return (text_meta.x_width - text_meta.cursor_tile_x) > 2;  
 }

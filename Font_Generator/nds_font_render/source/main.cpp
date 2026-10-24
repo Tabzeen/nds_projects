@@ -30,9 +30,14 @@ int main(void) {
 	// returns the pointer offset from 0x0600 0000, so if we map something to another 
 	// Screen block, it returns an invalid address
 	int main_bg = bgInit(0, BgType_Text4bpp, BgSize_T_256x256, 0, 0);
+	// Neutral text bg to make the shadows visible
+	int text_bg= bgInit(1, BgType_Text4bpp, BgSize_T_256x256, 1, 1);
 
-	*(BG_PALETTE + 1) = 0xFFFF;
-	*(BG_PALETTE + 2) = 0xFF00;
+	// Define the palette colors for testing
+	*(BG_PALETTE + 1) = 0x0000;
+	*(BG_PALETTE + 2) = 0xFFFF;
+	*(BG_PALETTE + 3) = 0x04 | 0x04 << 5 | 0x04  << 10;
+	*(BG_PALETTE + 4) = 0x04 | 0x00 << 5 | 0x06  << 10;
 
 
 	const CharData* char_data = get_char_data();
@@ -42,8 +47,11 @@ int main(void) {
 
 	DialogueEngine dialogue_engine(char_data, bg_map_ptr, bg_tile_ptr);
 
-	dialogue_engine.init_map_bounds(0, 10, 0, 31);
-	//dialogue_engine.push_hello();
+	dialogue_engine.init_map_bounds(0, 11, 0, 31);
+
+	// Define the blue background
+	u32 blue_tile = 0x33333333;
+	swiCopy(&blue_tile, bgGetGfxPtr(text_bg), 8 | COPY_MODE_FILL | COPY_MODE_WORD);
 
 	bool once = false;
 
