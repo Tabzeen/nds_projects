@@ -1,9 +1,8 @@
 #include <nds.h>
 #include <stdio.h> 
 #include <string.h>
-
 #include <array>
-#include <vector> 
+#include "CharData.h"
 
 #include "dialogue_engine.h"
 
@@ -41,7 +40,7 @@ void DialogueEngine::write_char_to_buffer(u32 char_idx, u8 color, bool shadow){
     // Dont write invalid Character idx values
     sassert(char_idx < char_data->char_cnt, "Invalid Character Accessed!");
     //fprintf(stderr, "Addr of Char data: %p \n", char_wram_row_data);
-    int arr_steps = font_dim / 8;
+    int arr_steps = char_data->font_dim / 8;
 
     // Perform three passes:
     // The first one shifts x by +1 to draw a shadow to the right
@@ -57,7 +56,7 @@ void DialogueEngine::write_char_to_buffer(u32 char_idx, u8 color, bool shadow){
 
         // Iterate over Rows
         for(int i = 0; i < char_data->font_dim; i++){
-            const u8* src_addr = &char_data->font_data[char_idx * font_data_elem_size + arr_steps * i];
+            const u8* src_addr = &char_data->pixels[char_idx * char_data->char_size_u8 + arr_steps * i];
 
             // Add start offset to iterator
             u8 offset_i = i + text_meta.cursor_stride_y + shadow_off_y;
@@ -98,7 +97,6 @@ void DialogueEngine::write_char_to_buffer(u32 char_idx, u8 color, bool shadow){
                 tileset_copy[row_stride * tile_size_u32*3 + row_off + 8*j ] = 
                     (tileset_copy[row_stride * tile_size_u32*3 + row_off + 8*j] & ~mask) | char_wram_row_data[j];
             }
-
         }
     }   
 }
@@ -219,7 +217,7 @@ void DialogueEngine::push_char(int idx, bool advance){
     copy_buffer_to_rows();
 
     if(advance){
-        u8 idx_stride = char_data->char_meta[idx].advance + text_meta.kerning;
+        u8 idx_stride = char_data->strides[idx] + text_meta.kerning;
         // We do a somewhat unnecessary convert here just to convert it back. We might wanna adjust that
         u8 target_stride_x = idx_stride + 8 * text_meta.cursor_tile_x + text_meta.cursor_stride_x;   
         u8 target_y = 8 * text_meta.cursor_tile_y + text_meta.cursor_stride_y;
@@ -228,13 +226,6 @@ void DialogueEngine::push_char(int idx, bool advance){
 }
 
 
-
-void DialogueEngine::push_hello(){
-    u8 arr[] = {39, 68, 75, 75, 78, 17, 54, 78, 81, 75, 67};
-    for(int i = 0; i < sizeof(arr); i++){
-        push_char(arr[i], 1);
-    }
-}
 
 // TODO, we need to export a decoder function here, which maps an ASCII string (or any index for what it matters)
 // To the internal Representation

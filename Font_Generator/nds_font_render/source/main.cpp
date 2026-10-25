@@ -2,6 +2,7 @@
 #include <nds.h>
 #include <stdio.h>
 
+#include "PmdFont.h"
 #include "dialogue_engine.h"
 
 //---------------------------------------------------------------------------------
@@ -40,7 +41,7 @@ int main(void) {
 	*(BG_PALETTE + 4) = 0x04 | 0x00 << 5 | 0x06  << 10;
 
 
-	const CharData* char_data = get_char_data();
+	const CharData* char_data = &Fonts::PmdFont::Data;
 
 	u16* bg_map_ptr = bgGetMapPtr(main_bg) + 0x8000;
 	u16* bg_tile_ptr = bgGetGfxPtr(main_bg);
