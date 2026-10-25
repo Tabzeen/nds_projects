@@ -104,6 +104,7 @@ namespace Fonts::${fontname} {
     constexpr CharData Data = {
         .version        = ${version},
         .font_dim       = ${font_dim},
+        .char_cnt       = ${char_cnt},
         .char_size_u8   = ${char_size_u8},
         .strides        = ${fontname}_bin + ${stride_offset},
         .pixels         = ${fontname}_bin + ${pixel_data_offset},
@@ -117,7 +118,8 @@ header_content = header_template.substitute(
     fontname=FONT_NAME,
     version=FONT_VERSION,
     font_dim=FONT_DIM,
-    char_size_u8=0,
+    char_cnt=pad_len + char_cnt,
+    char_size_u8=CHAR_SIZE_U8,
     stride_offset=stride_offset,
     pixel_data_offset=pixel_data_offset,
 )

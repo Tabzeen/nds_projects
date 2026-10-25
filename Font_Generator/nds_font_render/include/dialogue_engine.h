@@ -3,7 +3,7 @@
 #include <nds.h>
 #include <array>
 #include <cstdint>
-#include "font.h"
+#include "CharData.h"
 
 
 constexpr u8 tile_size_u32 = 8;

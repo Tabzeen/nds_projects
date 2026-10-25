@@ -2,6 +2,7 @@
 #include <nds.h>
 #include <stdio.h>
 
+#include "CharData.h"
 #include "PmdFont.h"
 #include "dialogue_engine.h"
 
